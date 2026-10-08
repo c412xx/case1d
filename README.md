@@ -59,7 +59,7 @@ git checkout "xx" 移动到xx分支下
 git branch "xx" 创建xx分支  
 git merge "xx" 在除了xx分支时可以使用，把xx合并到该分支下  
 git branch -d "xx" 删除xx分支  
-git log --oneline 查看提交的哈希值
+git log --oneline 查看提交的哈希值  
 git reset --hard <commit_hash> 回溯到对应哈希值的版本
 
 # 选择MIT协议的原因
