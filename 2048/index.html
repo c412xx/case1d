@@ -371,7 +371,7 @@
       <div class="side">
         <div class="btns">
           <button class="btn" id="undoBtn" disabled>撤销</button>
-          <button class="btn btn-ghost" id="recordsBtn">战局记录</button>
+          <button class="btn btn-ghost" id="recordsBtn">存档管理</button>
           <button class="btn" id="newGameBtn">新游戏</button>
         </div>
         <div class="scores">
@@ -403,10 +403,10 @@
   <div class="modal" id="recordsModal" hidden>
     <div class="modal-card rec-card">
       <div class="modal-head">
-        <h3>战局记录 · 存档</h3>
+        <h3>存档管理</h3>
         <button class="icon-btn" id="recordsModalClose" title="关闭">✕</button>
       </div>
-      <p class="modal-note" id="recordsNote">游戏结束后自动存档（得分 · 最大数 · 使用步数）。可复盘回退到任意一步，也可从过去某个时刻继续游玩（续玩局不刷新「生涯最高」）。最多保留 10 局。</p>
+      <p class="modal-note" id="recordsNote">游戏结束后自动存档。可复盘回退到任意一步，也可从过去某个时刻继续游玩。续玩局不刷新「生涯最高」。最多保留 10 局。</p>
       <div class="rec-tools">
         <button class="btn btn-ghost" id="importBtn">导入存档文件</button>
         <input type="file" id="importFile" accept=".json,application/json" hidden>
@@ -738,6 +738,11 @@
     var snap = snapshotState();    // 先记录移动前的棋盘与分数
     var res = computeMove(name);
     if (!res) return false;        // 该方向没有任何变化（不记录快照）
+
+    for (var mi = 0; mi < res.merges.length; mi++) {   // 记录本局“首次合成”的里程碑（含人工与 AI 的每一步）
+      var mval = res.merges[mi].m && res.merges[mi].m.value;
+      if (mval >= 128) mlSeen[mval] = 1;
+    }
 
     lastState = snap;              // 仅有效滑动产生可撤回的上一步
     updateUndoBtn();
@@ -1169,6 +1174,7 @@
     addRandomTile();                 // 开局两个随机滑块
     addRandomTile();
     bestLocked = false;              // 新对局允许刷新“生涯最高”
+    mlSeen = {};                     // 新对局重置“已首次合成”的里程碑记录
     session = { src: 'new', snaps: [{ v: boardVals(), s: 0 }], aiUsed: false };
     syncMoves();                     // 新对局步数清零
   }
@@ -1228,6 +1234,7 @@
   var ML_MILESTONE = { 128: 1, 256: 2, 512: 4, 1024: 24, 2048: 48, 4096: 96, 8192: 192, 16384: 384 };
   var ML_TABLES = null;              // [{pos, terms, w:Map}] 价值网络查表权重（由预设文件载入）
   var ML_EPISODES = 0;               // 权重对应的累计训练局数（随预设文件读入，仅展示）
+  var mlSeen = {};                   // 本局已“首次合成”过的里程碑值：决策时只对首次发奖励（与训练口径一致）
 
   function mulberry32(a) {
     return function () {
@@ -1364,11 +1371,12 @@
     return n;
   }
   // 页面 AI 使用的 ML 决策入口（rows 省略时读当前棋盘；无启发式搜索、无自学习）
+  // mlSeen：本局已获得过的里程碑 —— 传进去后，决策奖励与训练时“只发首次”完全同口径
   function mlPickDirection(rows) {
     rows = rows || rowsOfGrid();
     if (!ML_TABLES || !ML_TABLES.length) return null;
     var rng = function () { return Math.random(); };
-    return mlChooseDir(rows, rng, 0);
+    return mlChooseDir(rows, rng, 0, mlSeen);
   }
   function aiPickDirection(rows) {   // 唯一 AI：学到的价值函数
     return mlPickDirection(rows);
@@ -1380,7 +1388,8 @@
       mlBuildTuples: mlBuildTuples, mlEval: mlEval,
       mlMoveReward: mlMoveReward, mlChooseDir: mlChooseDir, mlMoveFull: mlMoveFull,
       mlPickDirection: mlPickDirection, aiPickDirection: aiPickDirection,
-      mlCountEntries: mlCountEntries, emptiesIds: emptiesIds
+      mlCountEntries: mlCountEntries, emptiesIds: emptiesIds,
+      mlSeenSnapshot: function () { var o = {}, k; for (k in mlSeen) if (Object.prototype.hasOwnProperty.call(mlSeen, k)) o[k] = 1; return o; }
     };
     if (typeof mulberry32 === 'function') hook.mulberry32 = mulberry32;
     if (typeof mlEncode === 'function') hook.mlEncode = mlEncode;
